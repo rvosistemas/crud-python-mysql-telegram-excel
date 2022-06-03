@@ -13,6 +13,24 @@ import matplotlib.pyplot as plt
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
+import pandas as pd
+from pandas import ExcelWriter
+from IPython.core.display import HTML
+
+from telegram import ParseMode
+from telegram.ext import Updater, CommandHandler
+
+import logging
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+
+def error_callback(update, context):
+    logger.warning('Update "%s" caused error "%s"', update, context.error)
+
 
 class Contabilidad:
 
@@ -97,7 +115,7 @@ class Contabilidad:
         ttk.Button(text="Barras", command=self.reporte_barras).grid(
             row=10, column=2, columnspan=1, sticky=E + W
         )
-        ttk.Button(text="Pdf", command=self.reporte_pdf).grid(
+        ttk.Button(text="REPORTES", command=self.reportes).grid(
             row=10, column=4, columnspan=1, sticky=E + W
         )
         # ------   llenado de filas ------
@@ -369,6 +387,11 @@ class Contabilidad:
         ## Mostramos Gráfica
         plt.show()
 
+    def reportes(self):
+        self.reporte_pdf()
+        self.reporte_excel()
+        self.mensaje["text"] = "EL REPORTE PDF Y EXCEL HAN SIDO GENERADOS"
+
     def reporte_pdf(self):
         my_canvas = canvas.Canvas("REPORTE.pdf", pagesize=letter)
         try:
@@ -385,8 +408,101 @@ class Contabilidad:
             imagen_torta.close()
         except FileNotFoundError:
             my_canvas.drawString(100, 460, "GRAFICO TORTA NO HA SIDO GENERADO")
-        self.mensaje["text"] = "EL REPORTE PDF HA SIDO GENERADO"
         my_canvas.save()
+
+    def path_to_image_html(path):
+        return '<img src="' + path + '" width="60" >'
+
+    def reporte_excel(self):
+        df = pd.DataFrame(
+            {
+                "LISTA": [1, 2],
+            }
+        )
+        try:
+            imagen_barras = open("barras.png")
+            imagen_barras.close()
+
+            df["grafico_barras"] = ["barras.png"]
+            # Rendering the dataframe as HTML table
+            df.to_html(escape=False, formatters=dict(grafico_barras=path_to_image_html))
+            # Rendering the images in the dataframe using the HTML method.
+            HTML(
+                df.to_html(
+                    escape=False, formatters=dict(grafico_barras=path_to_image_html)
+                )
+            )
+            # Saving the dataframe as a webpage
+            df.to_html(
+                "webpage.html",
+                escape=False,
+                formatters=dict(grafico_barras=path_to_image_html),
+            )
+        except FileNotFoundError:
+            df["grafico_barras"] = ["NO HA SIDO GENERADO"]
+
+        try:
+            imagen_torta = open("torta.png")
+            imagen_torta.close()
+
+            df["grafico_torta"] = ["torta.png"]
+            # Rendering the dataframe as HTML table
+            df.to_html(escape=False, formatters=dict(grafico_torta=path_to_image_html))
+            # Rendering the images in the dataframe using the HTML method.
+            HTML(
+                df.to_html(
+                    escape=False, formatters=dict(grafico_torta=path_to_image_html)
+                )
+            )
+            # Saving the dataframe as a webpage
+            df.to_html(
+                "webpage.html",
+                escape=False,
+                formatters=dict(grafico_torta=path_to_image_html),
+            )
+        except FileNotFoundError:
+            df["grafico_torta"] = ["NO HA SIDO GENERADO"]
+
+        writer = ExcelWriter("REPORTE.xlsx")
+        df.to_excel(writer, "Hoja de reportes", index=False)
+        writer.save()
+
+    # ------   TELEGRAM BOOT ------
+
+    def start(update, context):
+        """START"""
+        # Enviar un mensaje a un ID determinado.
+        context.bot.send_message(
+            update.message.chat_id, "Bienvenido", parse_mode=ParseMode.HTML
+        )
+
+        # Podemos llamar a otros comandos, sin que se haya activado en el chat (/help).
+        coin(update, context)
+
+    def coin(update, context):
+        """⚪️/⚫️ Moneda
+        Genera un número elatorio entre 1 y 2.
+        """
+        cid = update.message.chat_id
+        msg = "⚫️ Cara" if random.randint(1, 2) == 1 else "⚪️ Cruz"
+        # Responde directametne en el canal donde se le ha hablado.
+        update.message.reply_text(msg)
+
+    def main():
+        TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+        updater = Updater(TOKEN, use_context=True)
+        dp = updater.dispatcher
+
+        # Eventos que activarán nuestro bot.
+        # /comandos
+        dp.add_handler(CommandHandler("start", start))
+        dp.add_handler(CommandHandler("coin", coin))
+
+        dp.add_error_handler(error_callback)
+        # Comienza el bot
+        updater.start_polling()
+        # Lo deja a la escucha. Evita que se detenga.
+        updater.idle()
 
 
 if __name__ == "__main__":
