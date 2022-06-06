@@ -15,8 +15,9 @@ from reportlab.pdfgen import canvas
 
 import pandas as pd
 from pandas import ExcelWriter
-from IPython.core.display import HTML
+from IPython.core.display import display, HTML
 
+import telegram
 from telegram import ParseMode
 from telegram.ext import Updater, CommandHandler
 
@@ -43,6 +44,12 @@ class Contabilidad:
             pdf = open("REPORTE.pdf")
             pdf.close()
             remove("REPORTE.pdf")
+        except FileNotFoundError:
+            pass
+        try:
+            pdf = open("REPORTE.xlsx")
+            pdf.close()
+            remove("REPORTE.xlsx")
         except FileNotFoundError:
             pass
         try:
@@ -121,7 +128,7 @@ class Contabilidad:
         # ------   llenado de filas ------
         self.obtener_movimientos()
 
-    def correr_consulta(self, consulta, parameteros=()):
+    def correr_consulta(self, consulta, parametros=()):
         try:
             result = ""
             connection = mysql.connector.connect(
@@ -131,10 +138,15 @@ class Contabilidad:
                 db_Info = connection.get_server_info()
                 print("Connected to MySQL Server version ", db_Info)
                 cursor = connection.cursor(buffered=True, dictionary=True)
-                cursor.execute(consulta, parameteros)
-                result = cursor.fetchall()
+                cursor.execute(consulta, parametros)
+                if parametros == ():
+                    result = cursor.fetchall()
+                else:
+                    result = connection.commit()
         except Error as e:
-            print("Error Mientras conectabas con la bases de datos MySQL", e)
+            print(
+                f"Error Mientras conectabas con la bases de datos MySQL, ERROR -> {e}"
+            )
         finally:
             if connection.is_connected():
                 cursor.close()
@@ -169,31 +181,30 @@ class Contabilidad:
 
     def validaciones(self):
         return (
-            len(self.descripcion.get()) != 0
-            and len(self.tipo.get()) != 0
-            and len(self.fecha.get()) != 0
-            and len(self.valor.get()) != 0
+            len(self.description.get()) != 0
+            and len(self.type.get()) != 0
+            and len(self.price.get()) != 0
+            and str(self.date.get_date()) != "22/5/20"
         )
 
     def limpiar_formulario(self):
-        self.descripcion.delete(0, END)
-        self.tipo.delete(0, END)
-        self.valor.delete(0, END)
-        self.fecha.delete(0, END)
+        self.description.delete(0, END)
+        self.type.delete(0, END)
+        self.price.delete(0, END)
 
     def agregar_movimiento(self):
         if self.validaciones():
-            consulta = "INSERT INTO movimientos VALUES(NULL, ?, ?, ?, ?)"
+            consulta = "INSERT INTO movimientos (id, descripcion, tipo, valor, fecha) VALUES (NULL, %s, %s, %s, %s)"
             parametros = (
-                self.descripcion.get(),
-                self.tipo.get(),
-                self.valor.get(),
-                self.fecha.get(),
+                self.description.get(),
+                self.type.get(),
+                float(self.price.get()),
+                self.date.get_date(),
             )
             self.correr_consulta(consulta, parametros)
             self.mensaje[
                 "text"
-            ] = f"El {self.tipo.get()} se ha GUARDADO satisfactoriamente."
+            ] = f"El {self.type.get()} se ha GUARDADO satisfactoriamente."
             self.limpiar_formulario()
         else:
             self.mensaje["text"] = "TODOS LOS CAMPOS SON REQUERIDOS"
@@ -202,12 +213,12 @@ class Contabilidad:
     def borrar_movimiento(self):
         self.mensaje["text"] = ""
         try:
-            id = self.tree.item(self.tree.selection())["text"][0]
+            id = self.tree.item(self.tree.selection())["text"]
         except IndexError:
             self.mensaje["text"] = "Por favor SELECCIONA un movimiento"
             return
         self.mensaje["text"] = ""
-        consulta = "DELETE FROM movimiento WHERE id = ?"
+        consulta = "DELETE FROM movimientos WHERE id = %s"
         self.correr_consulta(consulta, (id,))
         self.mensaje[
             "text"
@@ -242,9 +253,9 @@ class Contabilidad:
         ).grid(row=0, column=1)
         # ------   Descripcion nueva ------
         Label(self.ventana_editar, text="Descripcion: ").grid(row=1, column=0)
-        description = Entry(self.ventana_editar)
-        description.focus()
-        description.grid(row=1, column=1)
+        self.new_description = Entry(self.ventana_editar)
+        self.new_description.focus()
+        self.new_description.grid(row=1, column=1)
 
         # ------   tipo antiguo ------
         Label(self.ventana_editar, text="tipo anterior").grid(row=2, column=0)
@@ -255,10 +266,10 @@ class Contabilidad:
         ).grid(row=2, column=1)
         # ------   tipo nuevo ------
         Label(self.ventana_editar, text="Tipo: ").grid(row=3, column=0)
-        type = ttk.Combobox(
+        self.new_type = ttk.Combobox(
             self.ventana_editar, state="readonly", values=["Ingreso", "Gasto"]
         )
-        type.grid(row=3, column=1)
+        self.new_type.grid(row=3, column=1)
 
         # ------   valor antiguo ------
         Label(self.ventana_editar, text="valor anterior").grid(row=4, column=0)
@@ -269,8 +280,8 @@ class Contabilidad:
         ).grid(row=4, column=1)
         # ------   valor nuevo ------
         Label(self.ventana_editar, text="Valor: ").grid(row=5, column=0)
-        price = Entry(self.ventana_editar)
-        price.grid(row=5, column=1)
+        self.new_price = Entry(self.ventana_editar)
+        self.new_price.grid(row=5, column=1)
 
         # ------   fecha antigua ------
         Label(self.ventana_editar, text="fecha anterior").grid(row=6, column=0)
@@ -281,43 +292,52 @@ class Contabilidad:
         ).grid(row=6, column=1)
         # ------   fecha nueva ------
         Label(self.ventana_editar, text="Fecha: ").grid(row=7, column=0)
-        date = Calendar(
+        self.new_date = Calendar(
             self.ventana_editar, selectmode="day", year=2020, month=5, day=22
         )
-        date.grid(row=7, column=1)
+        self.new_date.grid(row=7, column=1)
 
-        if len(description.get()) == 0:
-            description = descripcion
-        if len(type.get()) == 0:
-            type = tipo
-        if len(price.get()) == 0:
-            price = valor
-        if str(date.get()) == "22/5/20":
-            date = fecha
-
-        datos_nuevos = {
-            "descripcion": description,
-            "tipo": type,
-            "valor": price,
-            "fecha": date,
+        datos_viejos = {
+            "descripcion": descripcion,
+            "tipo": tipo,
+            "valor": valor,
+            "fecha": fecha,
         }
 
         Button(
             self.ventana_editar,
             text="Actualizar",
-            command=lambda: self.actualizar(datos_nuevos, id),
+            command=lambda: self.actualizar(datos_viejos, id),
         ).grid(row=8, column=0, sticky=W)
 
-    def actualizar(self, datos_nuevos, id):
-        consulta = "UPDATE movimientos SET descripcion = ?, tipo = ?, valor = ?, fecha = ? WHERE id = ?"
+    def actualizar(self, datos_viejos, id):
+        if len(self.new_description.get()) == 0:
+            self.new_description = datos_viejos["descripcion"]
+        else:
+            self.new_description = str(self.new_description.get())
+        if len(self.new_type.get()) == 0:
+            self.new_type = datos_viejos["tipo"]
+        else:
+            self.new_type = str(self.new_type.get())
+        if len(self.new_price.get()) == 0:
+            self.new_price = datos_viejos["valor"]
+        else:
+            self.new_price = str(self.new_price.get())
+        if str(self.new_date.get_date()) == "22/5/20":
+            self.new_date = datos_viejos["fecha"]
+        else:
+            self.new_date = str(self.new_date.get())
+
+        consulta = "UPDATE movimientos SET descripcion = %s, tipo = %s, valor = %s, fecha = %s WHERE id = %s"
         parametros = (
-            datos_nuevos["descripcion"],
-            datos_nuevos["tipo"],
-            datos_nuevos["valor"],
-            datos_nuevos["fecha"],
+            self.new_description,
+            self.new_type,
+            self.new_price,
+            self.new_date,
             id,
         )
         self.correr_consulta(consulta, parametros)
+        print("$" * 20, "parametros: -->  ", parametros)
         self.ventana_editar.destroy()
         self.mensaje["text"] = f"El movimiento ha sido ACTUALIZADO satisfactoriamente"
         self.obtener_movimientos()
@@ -390,7 +410,18 @@ class Contabilidad:
     def reportes(self):
         self.reporte_pdf()
         self.reporte_excel()
-        self.mensaje["text"] = "EL REPORTE PDF Y EXCEL HAN SIDO GENERADOS"
+        self.mensaje["text"] = "EL REPORTE PDF Y EXCEL HAN SIDO GENERADOS Y ENVIADOS"
+
+    def envio_telegram(self, reporte):
+        bot_token = "5541373563:AAG9WL9CpEH1Yi8Cfq_kR9oyVOyYQY0CYyQ"
+        chat_id = "@prueba_itp_bot"
+        bot = telegram.Bot(token=bot_token)
+
+        with open(reporte, "rb") as photo_file:
+            bot.sendPhoto(
+                chat_id=chat_id, photo=photo_file, caption="Hola, te envio este reporte"
+            )
+            photo_file.close()
 
     def reporte_pdf(self):
         my_canvas = canvas.Canvas("REPORTE.pdf", pagesize=letter)
@@ -398,6 +429,7 @@ class Contabilidad:
             imagen_barras = open("barras.png")
             my_canvas.drawString(100, 760, "GRAFICO BARRAS")
             my_canvas.drawImage("barras.png", 100, 500, width=250, height=250)
+            self.envio_telegram("barras.png")
             imagen_barras.close()
         except FileNotFoundError:
             my_canvas.drawString(100, 760, "GRAFICO BARRAS NO HA SIDO GENERADO")
@@ -405,104 +437,78 @@ class Contabilidad:
             imagen_torta = open("torta.png")
             my_canvas.drawString(100, 460, "GRAFICO TORTA")
             my_canvas.drawImage("torta.png", 100, 200, width=250, height=250)
+            self.envio_telegram("torta.png")
             imagen_torta.close()
         except FileNotFoundError:
             my_canvas.drawString(100, 460, "GRAFICO TORTA NO HA SIDO GENERADO")
         my_canvas.save()
 
     def path_to_image_html(path):
-        return '<img src="' + path + '" width="60" >'
+        return '<img src="' + path + '" width="200" >'
 
     def reporte_excel(self):
-        df = pd.DataFrame(
-            {
-                "LISTA": [1, 2],
-            }
-        )
+        df = pd.DataFrame({})
+        error = False
         try:
             imagen_barras = open("barras.png")
             imagen_barras.close()
-
-            df["grafico_barras"] = ["barras.png"]
-            # Rendering the dataframe as HTML table
-            df.to_html(escape=False, formatters=dict(grafico_barras=path_to_image_html))
-            # Rendering the images in the dataframe using the HTML method.
-            HTML(
-                df.to_html(
-                    escape=False, formatters=dict(grafico_barras=path_to_image_html)
-                )
-            )
-            # Saving the dataframe as a webpage
-            df.to_html(
-                "webpage.html",
-                escape=False,
-                formatters=dict(grafico_barras=path_to_image_html),
-            )
         except FileNotFoundError:
+            error = True
+        if not error:
+            # your images
+            imagen_barra = ["barras.png"]
+
+            df["grafico_barras"] = imagen_barra
+
+            # convert your links to html tags
+            def path_to_image_html(path):
+                return '<img src="' + path + '" width="60" >'
+
+            pd.set_option("display.max_colwidth", None)
+
+            image_cols = ["grafico_barras"]
+
+            # Create the dictionariy to be passed as formatters
+            format_dict = {}
+            for image_col in image_cols:
+                format_dict[image_col] = path_to_image_html
+
+            display(HTML(df.to_html(escape=False, formatters=format_dict)))
+        else:
             df["grafico_barras"] = ["NO HA SIDO GENERADO"]
 
+        error = False
         try:
             imagen_torta = open("torta.png")
             imagen_torta.close()
-
-            df["grafico_torta"] = ["torta.png"]
-            # Rendering the dataframe as HTML table
-            df.to_html(escape=False, formatters=dict(grafico_torta=path_to_image_html))
-            # Rendering the images in the dataframe using the HTML method.
-            HTML(
-                df.to_html(
-                    escape=False, formatters=dict(grafico_torta=path_to_image_html)
-                )
-            )
-            # Saving the dataframe as a webpage
-            df.to_html(
-                "webpage.html",
-                escape=False,
-                formatters=dict(grafico_torta=path_to_image_html),
-            )
         except FileNotFoundError:
-            df["grafico_torta"] = ["NO HA SIDO GENERADO"]
+            error = True
+        if not error:
+            # your images
+            imagen_torta = ["torta.png"]
+
+            df["grafico_torta"] = imagen_torta
+
+            # convert your links to html tags
+            def path_to_image_html(path):
+                return '<img src="' + path + '" width="60" >'
+
+            pd.set_option("display.max_colwidth", None)
+
+            image_cols = ["grafico_torta"]
+
+            # Create the dictionariy to be passed as formatters
+            format_dict = {}
+            for image_col in image_cols:
+                format_dict[image_col] = path_to_image_html
+
+            display(HTML(df.to_html(escape=False, formatters=format_dict)))
+        else:
+            df["grafico_torta"] = ["NO HA SIDO GENERADO", ""]
 
         writer = ExcelWriter("REPORTE.xlsx")
         df.to_excel(writer, "Hoja de reportes", index=False)
         writer.save()
-
-    # ------   TELEGRAM BOOT ------
-
-    def start(update, context):
-        """START"""
-        # Enviar un mensaje a un ID determinado.
-        context.bot.send_message(
-            update.message.chat_id, "Bienvenido", parse_mode=ParseMode.HTML
-        )
-
-        # Podemos llamar a otros comandos, sin que se haya activado en el chat (/help).
-        coin(update, context)
-
-    def coin(update, context):
-        """⚪️/⚫️ Moneda
-        Genera un número elatorio entre 1 y 2.
-        """
-        cid = update.message.chat_id
-        msg = "⚫️ Cara" if random.randint(1, 2) == 1 else "⚪️ Cruz"
-        # Responde directametne en el canal donde se le ha hablado.
-        update.message.reply_text(msg)
-
-    def main():
-        TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-        updater = Updater(TOKEN, use_context=True)
-        dp = updater.dispatcher
-
-        # Eventos que activarán nuestro bot.
-        # /comandos
-        dp.add_handler(CommandHandler("start", start))
-        dp.add_handler(CommandHandler("coin", coin))
-
-        dp.add_error_handler(error_callback)
-        # Comienza el bot
-        updater.start_polling()
-        # Lo deja a la escucha. Evita que se detenga.
-        updater.idle()
 
 
 if __name__ == "__main__":
