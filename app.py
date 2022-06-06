@@ -18,8 +18,6 @@ from pandas import ExcelWriter
 from IPython.core.display import display, HTML
 
 import telegram
-from telegram import ParseMode
-from telegram.ext import Updater, CommandHandler
 
 import logging
 
@@ -360,57 +358,68 @@ class Contabilidad:
         return gastos
 
     def reporte_torta(self):
-        ingresos = self.consulta_ingresos()
-        gastos = self.consulta_gastos()
+        if self.tree.size() == (0, 0):
+            self.mensaje["text"] = "Debe existir un registro"
+        else:
+            ingresos = self.consulta_ingresos()
+            gastos = self.consulta_gastos()
 
-        # Creating dataset
-        movimientos = ["Ingresos", "Gastos"]
+            # Creating dataset
+            movimientos = ["Ingresos", "Gastos"]
 
-        datos = [ingresos, gastos]
+            datos = [ingresos, gastos]
 
-        # Creating plot
-        fig = plt.figure(figsize=(10, 7))
-        plt.pie(datos, labels=movimientos, autopct="%1.1f%%")
-        plt.legend(title="Movimientos", loc="upper left")
+            # Creating plot
+            fig = plt.figure(figsize=(10, 7))
+            plt.pie(datos, labels=movimientos, autopct="%1.1f%%")
+            plt.legend(title="Movimientos", loc="upper left")
 
-        ## Guardar imagen del grafico
-        plt.savefig("torta.png", bbox_inches="tight")
+            ## Guardar imagen del grafico
+            plt.savefig("torta.png", bbox_inches="tight")
 
-        # show plot
-        plt.show()
+            # show plot
+            plt.show()
 
     def reporte_barras(self):
-        ingresos = self.consulta_ingresos()
-        gastos = self.consulta_gastos()
+        if self.tree.size() == (0, 0):
+            self.mensaje["text"] = "Debe existir un registro"
+        else:
+            ingresos = self.consulta_ingresos()
+            gastos = self.consulta_gastos()
 
-        ## Declaramos valores para el eje x
-        eje_x = ["Ingresos", "Gastos"]
+            ## Declaramos valores para el eje x
+            eje_x = ["Ingresos", "Gastos"]
 
-        ## Declaramos valores para el eje y
-        eje_y = [ingresos, gastos]
+            ## Declaramos valores para el eje y
+            eje_y = [ingresos, gastos]
 
-        ## Creamos Gráfica
-        plt.bar(eje_x, eje_y)
+            ## Creamos Gráfica
+            plt.bar(eje_x, eje_y)
 
-        ## Legenda en el eje y
-        plt.ylabel("Cantidad")
+            ## Legenda en el eje y
+            plt.ylabel("Cantidad")
 
-        ## Legenda en el eje x
-        plt.xlabel("movimientos")
+            ## Legenda en el eje x
+            plt.xlabel("movimientos")
 
-        ## Título de Gráfica
-        plt.title("Grafico de gastos e ingresos")
+            ## Título de Gráfica
+            plt.title("Grafico de gastos e ingresos")
 
-        ## Guardar imagen del grafico
-        plt.savefig("barras.png", bbox_inches="tight")
+            ## Guardar imagen del grafico
+            plt.savefig("barras.png", bbox_inches="tight")
 
-        ## Mostramos Gráfica
-        plt.show()
+            ## Mostramos Gráfica
+            plt.show()
 
     def reportes(self):
-        self.reporte_pdf()
-        self.reporte_excel()
-        self.mensaje["text"] = "EL REPORTE PDF Y EXCEL HAN SIDO GENERADOS Y ENVIADOS"
+        if self.tree.size() == (0, 0):
+            self.mensaje["text"] = "Debe existir un registro"
+        else:
+            self.reporte_pdf()
+            self.reporte_excel()
+            self.mensaje[
+                "text"
+            ] = "EL REPORTE PDF Y EXCEL HAN SIDO GENERADOS Y ENVIADOS"
 
     def envio_telegram(self, reporte):
         bot_token = "5541373563:AAG9WL9CpEH1Yi8Cfq_kR9oyVOyYQY0CYyQ"
