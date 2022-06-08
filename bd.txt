@@ -1,13 +1,7 @@
-CREATE TABLE `mysql-python-telegram-excel`.`ingresos` (
+CREATE TABLE `mysql-python-telegram-excel`.`movimientos` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `descripcion` VARCHAR(45) NOT NULL,
-  `valor` DOUBLE NOT NULL,
-  `fecha` DATE NOT NULL,
-  PRIMARY KEY (`id`));
-
-  CREATE TABLE `mysql-python-telegram-excel`.`gastos` (
-  `id` INT NOT NULL AUTO_INCREMENT,
-  `descripcion` VARCHAR(45) NOT NULL,
+  `tipo` VARCHAR(45) NOT NULL,
   `valor` DOUBLE NOT NULL,
   `fecha` DATE NOT NULL,
   PRIMARY KEY (`id`));

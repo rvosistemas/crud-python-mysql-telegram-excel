@@ -14,9 +14,8 @@ import matplotlib.pyplot as plt
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-import pandas as pd
-from pandas import ExcelWriter
-from IPython.core.display import display, HTML
+from openpyxl import Workbook
+from openpyxl.drawing.image import Image
 
 import telegram
 
@@ -388,7 +387,7 @@ class Contabilidad:
         if not ingresos:
             ingresos = 0
 
-        consulta_gastos = f"SELECT SUM(valor) FROM movimientos WHERE tipo = 'gastos' AND fecha BETWEEN '{fecha_inicial}' and '{fecha_final}'"
+        consulta_gastos = f"SELECT SUM(valor) FROM movimientos WHERE tipo = 'gasto' AND fecha BETWEEN '{fecha_inicial}' and '{fecha_final}'"
         gastos = self.correr_consulta(consulta_gastos)
         gastos = gastos[0]["SUM(valor)"]
         if not gastos:
@@ -419,15 +418,15 @@ class Contabilidad:
             self.ventana_barra.title("Generar grafico barras")
 
             # ------   fecha inicial ------
-            Label(self.ventana_torta, text="Fecha inicial: ").grid(row=1, column=0)
+            Label(self.ventana_barra, text="Fecha inicial: ").grid(row=1, column=0)
             fecha_inicial = Calendar(
-                self.ventana_torta, selectmode="day", year=2020, month=5, day=22
+                self.ventana_barra, selectmode="day", year=2020, month=5, day=22
             )
             fecha_inicial.grid(row=1, column=1)
             # ------   fecha nueva ------
-            Label(self.ventana_torta, text="Fecha final: ").grid(row=2, column=0)
+            Label(self.ventana_barra, text="Fecha final: ").grid(row=2, column=0)
             fecha_final = Calendar(
-                self.ventana_torta, selectmode="day", year=2020, month=5, day=22
+                self.ventana_barra, selectmode="day", year=2020, month=5, day=22
             )
             fecha_final.grid(row=2, column=1)
 
@@ -450,11 +449,13 @@ class Contabilidad:
 
         consulta_ingresos = f"SELECT SUM(valor) FROM movimientos WHERE tipo = 'ingreso' AND fecha BETWEEN '{fecha_inicial}' and '{fecha_final}'"
         ingresos = self.correr_consulta(consulta_ingresos)
+        ingresos = ingresos[0]["SUM(valor)"]
         if not ingresos:
             ingresos = 0
 
         consulta_gastos = f"SELECT SUM(valor) FROM movimientos WHERE tipo = 'gasto' AND fecha BETWEEN '{fecha_inicial}' and '{fecha_final}'"
         gastos = self.correr_consulta(consulta_gastos)
+        gastos = gastos[0]["SUM(valor)"]
         if not gastos:
             gastos = 0
 
@@ -524,7 +525,7 @@ class Contabilidad:
         return '<img src="' + path + '" width="200" >'
 
     def reporte_excel(self):
-        df = pd.DataFrame({})
+        libro = Workbook()
         error = False
         try:
             imagen_barras = open("barras.png")
@@ -532,27 +533,14 @@ class Contabilidad:
         except FileNotFoundError:
             error = True
         if not error:
-            # your images
-            imagen_barra = ["barras.png"]
-
-            df["grafico_barras"] = imagen_barra
-
-            # convert your links to html tags
-            def path_to_image_html(path):
-                return '<img src="' + path + '" width="60" >'
-
-            pd.set_option("display.max_colwidth", None)
-
-            image_cols = ["grafico_barras"]
-
-            # Create the dictionary to be passed as formatters
-            format_dict = {}
-            for image_col in image_cols:
-                format_dict[image_col] = path_to_image_html
-
-            display(HTML(df.to_html(escape=False, formatters=format_dict)))
+            hoja = libro.active
+            hoja["A1"] = "GRAFICO BARRA"
+            imagen = Image("barras.png")
+            hoja.add_image(imagen, "B1")
         else:
-            df["grafico_barras"] = ["NO HA SIDO GENERADO"]
+            hoja = libro.active
+            hoja["A1"] = "GRAFICO BARRA"
+            hoja["B1"] = "NO HA SIDO GENERADO"
 
         error = False
         try:
@@ -561,28 +549,13 @@ class Contabilidad:
         except FileNotFoundError:
             error = True
         if not error:
-            # your images
-            imagen_torta = ["torta.png"]
-
-            df["grafico_torta"] = imagen_torta
-
-            # convert your links to html tags
-            def path_to_image_html(path):
-                return '<img src="' + path + '" width="60" >'
-
-            pd.set_option("display.max_colwidth", None)
-
-            image_cols = ["grafico_torta"]
-
-            # Create the dictionary to be passed as formatters
-            format_dict = {}
-            for image_col in image_cols:
-                format_dict[image_col] = path_to_image_html
-
-            display(HTML(df.to_html(escape=False, formatters=format_dict)))
+            hoja = libro.active
+            hoja["A25"] = "GRAFICO TORTA"
+            imagen = Image("torta.png")
+            hoja.add_image(imagen, "B2")
         else:
-            df["grafico_torta"] = ["NO HA SIDO GENERADO", ""]
+            hoja = libro.active
+            hoja["A25"] = "GRAFICO TORTA"
+            hoja["B25"] = "NO HA SIDO GENERADO"
 
-        writer = ExcelWriter("REPORTE.xlsx")
-        df.to_excel(writer, "Hoja de reportes", index=False)
-        writer.save()
+        libro.save("REPORTE.xlsx")
