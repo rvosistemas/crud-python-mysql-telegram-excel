@@ -3,6 +3,7 @@ from tkinter import ttk
 from tkinter import *
 from tkcalendar import Calendar
 
+from datetime import datetime
 from os import remove
 
 import mysql.connector
@@ -182,11 +183,14 @@ class Contabilidad:
     def agregar_movimiento(self):
         if self.validaciones():
             consulta = "INSERT INTO movimientos (id, descripcion, tipo, valor, fecha) VALUES (NULL, %s, %s, %s, %s)"
+            aux_date = str(self.date.get_date()).replace("/", "-")
+            date = datetime.strptime(aux_date, "%d-%m-%y")
+            date = date.strftime("%Y-%m-%d")
             parametros = (
                 self.description.get(),
                 self.type.get(),
                 float(self.price.get()),
-                self.date.get_date(),
+                date,
             )
             self.correr_consulta(consulta, parametros)
             self.mensaje[
@@ -199,103 +203,111 @@ class Contabilidad:
 
     def borrar_movimiento(self):
         self.mensaje["text"] = ""
-        try:
-            id = self.tree.item(self.tree.selection())["text"]
-        except IndexError:
-            self.mensaje["text"] = "Por favor SELECCIONA un movimiento"
-            return
-        self.mensaje["text"] = ""
-        consulta = "DELETE FROM movimientos WHERE id = %s"
-        self.correr_consulta(consulta, (id,))
-        self.mensaje[
-            "text"
-        ] = f"El movimiento seleccionado ha sido BORRADO satisfactoriamente"
-        self.obtener_movimientos()
+        if len(self.tree.get_children("")) == 0:
+            self.mensaje["text"] = "Debe existir un registro"
+        else:
+            try:
+                id = self.tree.item(self.tree.selection())["text"]
+            except IndexError:
+                self.mensaje["text"] = "Por favor SELECCIONA un movimiento"
+                return
+            self.mensaje["text"] = ""
+            consulta = "DELETE FROM movimientos WHERE id = %s"
+            self.correr_consulta(consulta, (id,))
+            self.mensaje[
+                "text"
+            ] = f"El movimiento seleccionado ha sido BORRADO satisfactoriamente"
+            self.obtener_movimientos()
 
     def editar_movimiento(self):
         self.mensaje["text"] = ""
-        try:
-            item = self.tree.item(self.tree.selection())
-        except IndexError:
-            self.mensaje["text"] = "Por favor SELECCIONA un movimiento"
-            return
-        self.mensaje["text"] = ""
-        id = item["text"]
-        descripcion = item["values"][0]
-        tipo = item["values"][1]
-        valor = item["values"][2]
-        fecha = item["values"][3]
+        if len(self.tree.get_children("")) == 0:
+            self.mensaje["text"] = "Debe existir un registro"
+        else:
+            try:
+                item = self.tree.item(self.tree.selection())
+            except IndexError:
+                self.mensaje["text"] = "Por favor SELECCIONA un movimiento"
+                return
+            self.mensaje["text"] = ""
+            id = item["text"]
+            descripcion = item["values"][0]
+            tipo = item["values"][1]
+            valor = item["values"][2]
+            fecha = item["values"][3]
 
-        # ventana para editar movimiento
-        self.ventana_editar = Toplevel()
-        self.ventana_editar.title("Editar movimiento")
+            # ventana para editar movimiento
+            self.ventana_editar = Toplevel()
+            self.ventana_editar.title("Editar movimiento")
 
-        # datos
-        # ------   Descripcion antigua ------
-        Label(self.ventana_editar, text="descripcion anterior").grid(row=0, column=0)
-        Entry(
-            self.ventana_editar,
-            textvariable=StringVar(self.ventana_editar, value=descripcion),
-            state="readonly",
-        ).grid(row=0, column=1)
-        # ------   Descripcion nueva ------
-        Label(self.ventana_editar, text="Descripcion: ").grid(row=1, column=0)
-        self.new_description = Entry(self.ventana_editar)
-        self.new_description.focus()
-        self.new_description.grid(row=1, column=1)
+            # datos
+            # ------   Descripcion antigua ------
+            Label(self.ventana_editar, text="descripcion anterior").grid(
+                row=0, column=0
+            )
+            Entry(
+                self.ventana_editar,
+                textvariable=StringVar(self.ventana_editar, value=descripcion),
+                state="readonly",
+            ).grid(row=0, column=1)
+            # ------   Descripcion nueva ------
+            Label(self.ventana_editar, text="Descripcion: ").grid(row=1, column=0)
+            self.new_description = Entry(self.ventana_editar)
+            self.new_description.focus()
+            self.new_description.grid(row=1, column=1)
 
-        # ------   tipo antiguo ------
-        Label(self.ventana_editar, text="tipo anterior").grid(row=2, column=0)
-        Entry(
-            self.ventana_editar,
-            textvariable=StringVar(self.ventana_editar, value=tipo),
-            state="readonly",
-        ).grid(row=2, column=1)
-        # ------   tipo nuevo ------
-        Label(self.ventana_editar, text="Tipo: ").grid(row=3, column=0)
-        self.new_type = ttk.Combobox(
-            self.ventana_editar, state="readonly", values=["Ingreso", "Gasto"]
-        )
-        self.new_type.grid(row=3, column=1)
+            # ------   tipo antiguo ------
+            Label(self.ventana_editar, text="tipo anterior").grid(row=2, column=0)
+            Entry(
+                self.ventana_editar,
+                textvariable=StringVar(self.ventana_editar, value=tipo),
+                state="readonly",
+            ).grid(row=2, column=1)
+            # ------   tipo nuevo ------
+            Label(self.ventana_editar, text="Tipo: ").grid(row=3, column=0)
+            self.new_type = ttk.Combobox(
+                self.ventana_editar, state="readonly", values=["Ingreso", "Gasto"]
+            )
+            self.new_type.grid(row=3, column=1)
 
-        # ------   valor antiguo ------
-        Label(self.ventana_editar, text="valor anterior").grid(row=4, column=0)
-        Entry(
-            self.ventana_editar,
-            textvariable=StringVar(self.ventana_editar, value=valor),
-            state="readonly",
-        ).grid(row=4, column=1)
-        # ------   valor nuevo ------
-        Label(self.ventana_editar, text="Valor: ").grid(row=5, column=0)
-        self.new_price = Entry(self.ventana_editar)
-        self.new_price.grid(row=5, column=1)
+            # ------   valor antiguo ------
+            Label(self.ventana_editar, text="valor anterior").grid(row=4, column=0)
+            Entry(
+                self.ventana_editar,
+                textvariable=StringVar(self.ventana_editar, value=valor),
+                state="readonly",
+            ).grid(row=4, column=1)
+            # ------   valor nuevo ------
+            Label(self.ventana_editar, text="Valor: ").grid(row=5, column=0)
+            self.new_price = Entry(self.ventana_editar)
+            self.new_price.grid(row=5, column=1)
 
-        # ------   fecha antigua ------
-        Label(self.ventana_editar, text="fecha anterior").grid(row=6, column=0)
-        Entry(
-            self.ventana_editar,
-            textvariable=StringVar(self.ventana_editar, value=fecha),
-            state="readonly",
-        ).grid(row=6, column=1)
-        # ------   fecha nueva ------
-        Label(self.ventana_editar, text="Fecha: ").grid(row=7, column=0)
-        self.new_date = Calendar(
-            self.ventana_editar, selectmode="day", year=2020, month=5, day=22
-        )
-        self.new_date.grid(row=7, column=1)
+            # ------   fecha antigua ------
+            Label(self.ventana_editar, text="fecha anterior").grid(row=6, column=0)
+            Entry(
+                self.ventana_editar,
+                textvariable=StringVar(self.ventana_editar, value=fecha),
+                state="readonly",
+            ).grid(row=6, column=1)
+            # ------   fecha nueva ------
+            Label(self.ventana_editar, text="Fecha: ").grid(row=7, column=0)
+            self.new_date = Calendar(
+                self.ventana_editar, selectmode="day", year=2020, month=5, day=22
+            )
+            self.new_date.grid(row=7, column=1)
 
-        datos_viejos = {
-            "descripcion": descripcion,
-            "tipo": tipo,
-            "valor": valor,
-            "fecha": fecha,
-        }
+            datos_viejos = {
+                "descripcion": descripcion,
+                "tipo": tipo,
+                "valor": valor,
+                "fecha": fecha,
+            }
 
-        Button(
-            self.ventana_editar,
-            text="Actualizar",
-            command=lambda: self.actualizar(datos_viejos, id),
-        ).grid(row=8, column=0, sticky=W)
+            Button(
+                self.ventana_editar,
+                text="Actualizar",
+                command=lambda: self.actualizar(datos_viejos, id),
+            ).grid(row=8, column=0, sticky=W)
 
     def actualizar(self, datos_viejos, id):
         if len(self.new_description.get()) == 0:
@@ -313,7 +325,10 @@ class Contabilidad:
         if str(self.new_date.get_date()) == "22/5/20":
             self.new_date = datos_viejos["fecha"]
         else:
-            self.new_date = str(self.new_date.get())
+            aux_date = str(self.new_date.get_date()).replace("/", "-")
+            date = datetime.strptime(aux_date, "%d-%m-%y")
+            date = date.strftime("%Y-%m-%d")
+            self.new_date = date
 
         consulta = "UPDATE movimientos SET descripcion = %s, tipo = %s, valor = %s, fecha = %s WHERE id = %s"
         parametros = (
@@ -324,84 +339,148 @@ class Contabilidad:
             id,
         )
         self.correr_consulta(consulta, parametros)
-        print("$" * 20, "parametros: -->  ", parametros)
         self.ventana_editar.destroy()
         self.mensaje["text"] = f"El movimiento ha sido ACTUALIZADO satisfactoriamente"
         self.obtener_movimientos()
 
     # ------   REPORTES ------
-    def consulta_ingresos(self):
-        consulta_ingresos = "SELECT SUM(valor) FROM movimientos WHERE tipo = 'ingreso'"
+    def reporte_torta(self):
+        if len(self.tree.get_children("")) == 0:
+            self.mensaje["text"] = "Debe existir un registro"
+        else:
+            # ventana para editar movimiento
+            self.ventana_torta = Toplevel()
+            self.ventana_torta.title("Generar grafico torta")
+
+            # ------   fecha inicial ------
+            Label(self.ventana_torta, text="Fecha inicial: ").grid(row=1, column=0)
+            fecha_inicial = Calendar(
+                self.ventana_torta, selectmode="day", year=2020, month=5, day=22
+            )
+            fecha_inicial.grid(row=1, column=1)
+            # ------   fecha nueva ------
+            Label(self.ventana_torta, text="Fecha final: ").grid(row=2, column=0)
+            fecha_final = Calendar(
+                self.ventana_torta, selectmode="day", year=2020, month=5, day=22
+            )
+            fecha_final.grid(row=2, column=1)
+
+            Button(
+                self.ventana_torta,
+                text="Generar",
+                command=lambda: self.generar_torta(
+                    fecha_inicial.get_date(), fecha_final.get_date()
+                ),
+            ).grid(row=3, column=0, sticky=W)
+
+    def generar_torta(self, fecha_inicial, fecha_final):
+        aux_date = str(fecha_inicial).replace("/", "-")
+        date = datetime.strptime(aux_date, "%d-%m-%y")
+        fecha_inicial = date.strftime("%Y-%m-%d")
+
+        aux_date = str(fecha_final).replace("/", "-")
+        date = datetime.strptime(aux_date, "%d-%m-%y")
+        fecha_final = date.strftime("%Y-%m-%d")
+
+        consulta_ingresos = f"SELECT SUM(valor) FROM movimientos WHERE tipo = 'ingreso' AND fecha BETWEEN '{fecha_inicial}' and '{fecha_final}'"
         ingresos = self.correr_consulta(consulta_ingresos)
         ingresos = ingresos[0]["SUM(valor)"]
         if not ingresos:
             ingresos = 0
-        return ingresos
 
-    def consulta_gastos(self):
-        consulta_gastos = "SELECT SUM(valor) FROM movimientos WHERE tipo = 'gasto'"
+        consulta_gastos = f"SELECT SUM(valor) FROM movimientos WHERE tipo = 'gastos' AND fecha BETWEEN '{fecha_inicial}' and '{fecha_final}'"
         gastos = self.correr_consulta(consulta_gastos)
         gastos = gastos[0]["SUM(valor)"]
         if not gastos:
             gastos = 0
-        return gastos
 
-    def reporte_torta(self):
-        if self.tree.size() == (0, 0):
-            self.mensaje["text"] = "Debe existir un registro"
-        else:
-            ingresos = self.consulta_ingresos()
-            gastos = self.consulta_gastos()
+        # Creating dataset
+        movimientos = ["Ingresos", "Gastos"]
 
-            # Creating dataset
-            movimientos = ["Ingresos", "Gastos"]
+        datos = [ingresos, gastos]
 
-            datos = [ingresos, gastos]
+        # Creating plot
+        fig = plt.figure(figsize=(10, 7))
+        plt.pie(datos, labels=movimientos, autopct="%1.1f%%")
+        plt.legend(title="Movimientos", loc="upper left")
 
-            # Creating plot
-            fig = plt.figure(figsize=(10, 7))
-            plt.pie(datos, labels=movimientos, autopct="%1.1f%%")
-            plt.legend(title="Movimientos", loc="upper left")
+        ## Guardar imagen del grafico
+        plt.savefig("torta.png", bbox_inches="tight")
 
-            ## Guardar imagen del grafico
-            plt.savefig("torta.png", bbox_inches="tight")
-
-            # show plot
-            plt.show()
+        # show plot
+        plt.show()
 
     def reporte_barras(self):
-        if self.tree.size() == (0, 0):
+        if len(self.tree.get_children("")) == 0:
             self.mensaje["text"] = "Debe existir un registro"
         else:
-            ingresos = self.consulta_ingresos()
-            gastos = self.consulta_gastos()
+            # ventana para editar movimiento
+            self.ventana_barra = Toplevel()
+            self.ventana_barra.title("Generar grafico barras")
 
-            ## Declaramos valores para el eje x
-            eje_x = ["Ingresos", "Gastos"]
+            # ------   fecha inicial ------
+            Label(self.ventana_torta, text="Fecha inicial: ").grid(row=1, column=0)
+            fecha_inicial = Calendar(
+                self.ventana_torta, selectmode="day", year=2020, month=5, day=22
+            )
+            fecha_inicial.grid(row=1, column=1)
+            # ------   fecha nueva ------
+            Label(self.ventana_torta, text="Fecha final: ").grid(row=2, column=0)
+            fecha_final = Calendar(
+                self.ventana_torta, selectmode="day", year=2020, month=5, day=22
+            )
+            fecha_final.grid(row=2, column=1)
 
-            ## Declaramos valores para el eje y
-            eje_y = [ingresos, gastos]
+            Button(
+                self.ventana_barra,
+                text="Generar",
+                command=lambda: self.generar_barra(
+                    fecha_inicial.get_date(), fecha_final.get_date()
+                ),
+            ).grid(row=3, column=0, sticky=W)
 
-            ## Creamos Gráfica
-            plt.bar(eje_x, eje_y)
+    def generar_barra(self, fecha_inicial, fecha_final):
+        aux_date = str(fecha_inicial).replace("/", "-")
+        date = datetime.strptime(aux_date, "%d-%m-%y")
+        fecha_inicial = date.strftime("%Y-%m-%d")
 
-            ## Legenda en el eje y
-            plt.ylabel("Cantidad")
+        aux_date = str(fecha_final).replace("/", "-")
+        date = datetime.strptime(aux_date, "%d-%m-%y")
+        fecha_final = date.strftime("%Y-%m-%d")
 
-            ## Legenda en el eje x
-            plt.xlabel("movimientos")
+        consulta_ingresos = f"SELECT SUM(valor) FROM movimientos WHERE tipo = 'ingreso' AND fecha BETWEEN '{fecha_inicial}' and '{fecha_final}'"
+        ingresos = self.correr_consulta(consulta_ingresos)
+        if not ingresos:
+            ingresos = 0
 
-            ## Título de Gráfica
-            plt.title("Grafico de gastos e ingresos")
+        consulta_gastos = f"SELECT SUM(valor) FROM movimientos WHERE tipo = 'gasto' AND fecha BETWEEN '{fecha_inicial}' and '{fecha_final}'"
+        gastos = self.correr_consulta(consulta_gastos)
+        if not gastos:
+            gastos = 0
 
-            ## Guardar imagen del grafico
-            plt.savefig("barras.png", bbox_inches="tight")
+        eje_x = ["Ingresos", "Gastos"]
+        eje_y = [ingresos, gastos]
 
-            ## Mostramos Gráfica
-            plt.show()
+        ## Creamos Gráfica
+        plt.bar(eje_x, eje_y)
+
+        ## Legenda en el eje y
+        plt.ylabel("Cantidad")
+
+        ## Legenda en el eje x
+        plt.xlabel("movimientos")
+
+        ## Título de Gráfica
+        plt.title("Grafico de gastos e ingresos")
+
+        ## Guardar imagen del grafico
+        plt.savefig("barras.png", bbox_inches="tight")
+
+        ## Mostramos Gráfica
+        plt.show()
 
     def reportes(self):
-        if self.tree.size() == (0, 0):
+        if len(self.tree.get_children("")) == 0:
             self.mensaje["text"] = "Debe existir un registro"
         else:
             self.reporte_pdf()
@@ -466,7 +545,7 @@ class Contabilidad:
 
             image_cols = ["grafico_barras"]
 
-            # Create the dictionariy to be passed as formatters
+            # Create the dictionary to be passed as formatters
             format_dict = {}
             for image_col in image_cols:
                 format_dict[image_col] = path_to_image_html
@@ -495,7 +574,7 @@ class Contabilidad:
 
             image_cols = ["grafico_torta"]
 
-            # Create the dictionariy to be passed as formatters
+            # Create the dictionary to be passed as formatters
             format_dict = {}
             for image_col in image_cols:
                 format_dict[image_col] = path_to_image_html
